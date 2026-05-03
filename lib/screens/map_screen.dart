@@ -80,15 +80,24 @@ class _MapScreenState extends ConsumerState<MapScreen>
     _followUser = true;
   }
 
-  void _onMapMove(MapCamera camera, bool hasGesture) {
+  
+
+  
+  DateTime _lastFetch = DateTime(2000);
+
+  void _onMapPan(MapPosition position, bool hasGesture) {
     if (hasGesture) _followUser = false;
-
-    // Load cameras for new area when map moves significantly
-    final center = camera.center;
+    final center = position.center;
+    if (center == null) return;
     ref.read(mapCenterProvider.notifier).state = center;
+    final now = DateTime.now();
+    if (now.difference(_lastFetch).inSeconds > 3) {
+      _lastFetch = now;
+      final filters = ref.read(filterProvider);
+      ref.read(cameraProvider.notifier).fetch(lat: center.latitude, lng: center.longitude, radiusKm: filters.radiusKm);
+    }
   }
-
-  void _recenter() {
+void _recenter() {
     final pos = ref.read(userLocationProvider);
     if (pos == null) {
       _locateAndLoad();
@@ -138,8 +147,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
                     _followUser = false;
                   }
                 },
-                onPositionChanged: (camera, hasGesture) =>
-                    _onMapMove(camera, hasGesture),
+                onPositionChanged: (MapPosition position, bool hasGesture) { _onMapPan(position, hasGesture); },
                 onTap: (_, __) {
                   ref.read(selectedCameraProvider.notifier).state = null;
                 },
@@ -641,3 +649,7 @@ class _AlertBannerNotifier extends StateNotifier<ProximityAlert?> {
 
   void dismiss() => state = null;
 }
+
+
+
+

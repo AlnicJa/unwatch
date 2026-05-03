@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import '../models/camera.dart';
 import 'location_service.dart';
@@ -58,6 +60,7 @@ class NotificationService {
       vibrationPattern: isClose
           ? Int64List.fromList([0, 250, 100, 250])
           : Int64List.fromList([0, 200]),
+
       color: _cameraColor(cam.type),
       icon: '@mipmap/ic_launcher',
       channelShowBadge: false,
@@ -103,7 +106,7 @@ class NotificationService {
     await _plugin.cancel(999);
   }
 
-  static dynamic _cameraColor(CameraType type) {
+  static Color _cameraColor(CameraType type) {
     switch (type) {
       case CameraType.flock:
         return const Color(0xFFFFAA00);
@@ -115,15 +118,4 @@ class NotificationService {
         return const Color(0xFFBF5AF2);
     }
   }
-}
-
-// ignore: avoid_classes_with_only_static_members
-class Color {
-  final int value;
-  const Color(this.value);
-}
-
-// Dart Int64List shim for notification vibration
-class Int64List {
-  static List<int> fromList(List<int> list) => list;
 }
