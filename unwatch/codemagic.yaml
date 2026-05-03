@@ -1,0 +1,146 @@
+workflows:
+
+  # ─── iOS: App Store ──────────────────────────────────────────────────────────
+  ios-release:
+    name: Unwatch iOS — App Store
+    max_build_duration: 60
+    environment:
+      flutter: stable
+      xcode: latest
+      cocoapods: default
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: app.unwatch.unwatch     # ← change to your bundle ID
+      vars:
+        APP_STORE_CONNECT_ISSUER_ID: $APP_STORE_CONNECT_ISSUER_ID
+        APP_STORE_CONNECT_KEY_IDENTIFIER: $APP_STORE_CONNECT_KEY_IDENTIFIER
+        APP_STORE_CONNECT_PRIVATE_KEY: $APP_STORE_CONNECT_PRIVATE_KEY
+        CERTIFICATE_PRIVATE_KEY: $CERTIFICATE_PRIVATE_KEY
+
+    triggering:
+      events:
+        - tag
+      tag_patterns:
+        - pattern: 'v*'
+          include: true
+
+    scripts:
+      - name: Set up Flutter
+        script: flutter pub get
+
+      - name: Flutter analyze
+        script: flutter analyze --no-fatal-infos
+
+      - name: Flutter test
+        script: flutter test
+
+      - name: Build iOS (no codesign — Codemagic handles signing)
+        script: |
+          flutter build ios --release --no-codesign
+          
+      - name: Build IPA
+        script: |
+          xcode-project use-profiles
+          xcode-project build-ipa \
+            --workspace ios/Runner.xcworkspace \
+            --scheme Runner
+
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+      - flutter_drive.log
+
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
+        submit_to_app_store: false    # flip to true when ready for production
+        beta_groups:
+          - Internal Testers
+      email:
+        recipients:
+          - your@email.com            # ← your email
+        notify:
+          success: true
+          failure: true
+
+  # ─── Android: Play Store ─────────────────────────────────────────────────────
+  android-release:
+    name: Unwatch Android — Play Store
+    max_build_duration: 45
+    environment:
+      flutter: stable
+      android_signing:
+        - unwatch_keystore              # configured in Codemagic dashboard
+      vars:
+        GCLOUD_SERVICE_ACCOUNT_CREDENTIALS: $GCLOUD_SERVICE_ACCOUNT_CREDENTIALS
+        PACKAGE_NAME: app.unwatch.unwatch   # ← your package name
+
+    triggering:
+      events:
+        - tag
+      tag_patterns:
+        - pattern: 'v*'
+          include: true
+
+    scripts:
+      - name: Set up Flutter
+        script: flutter pub get
+
+      - name: Flutter analyze
+        script: flutter analyze --no-fatal-infos
+
+      - name: Flutter test
+        script: flutter test
+
+      - name: Build Android App Bundle
+        script: |
+          flutter build appbundle \
+            --release \
+            --build-number=$(($(google-play get-latest-build-number \
+              --package-name "$PACKAGE_NAME" \
+              --tracks=alpha,beta,production) + 1))
+
+    artifacts:
+      - build/app/outputs/bundle/release/app-release.aab
+      - build/app/outputs/mapping/release/mapping.txt
+
+    publishing:
+      google_play:
+        credentials: $GCLOUD_SERVICE_ACCOUNT_CREDENTIALS
+        track: internal                 # internal → alpha → beta → production
+        submit_as_draft: false
+      email:
+        recipients:
+          - your@email.com
+        notify:
+          success: true
+          failure: true
+
+  # ─── PR / Development builds (runs on every push, no store upload) ───────────
+  dev-check:
+    name: Unwatch Dev Check
+    max_build_duration: 20
+    environment:
+      flutter: stable
+
+    triggering:
+      events:
+        - push
+        - pull_request
+      branch_patterns:
+        - pattern: '*'
+          include: true
+
+    scripts:
+      - name: Get packages
+        script: flutter pub get
+
+      - name: Analyze
+        script: flutter analyze --no-fatal-infos
+
+      - name: Test
+        script: flutter test
+
+      - name: Build Android (debug — quick check)
+        script: flutter build apk --debug
